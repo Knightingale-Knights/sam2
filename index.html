@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knightingale Quote Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f1e8;
+    --ink: #1a1a1a;
+    --eucalypt: #9aa888;
+    --eucalypt-dark: #7a8868;
+    --cherry: #470917;
+    --muted: #8a8478;
+    --border: #d8d0bf;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .container {
+    width: 100%;
+    max-width: 640px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: 56px;
+    line-height: 1;
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 40px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 18px 20px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--ink);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  textarea:focus { border-color: var(--ink); }
+  textarea::placeholder { color: var(--muted); }
+  .button-row {
+    margin-top: 16px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  button {
+    background: var(--ink);
+    color: var(--bg);
+    border: none;
+    padding: 14px 28px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover:not(:disabled) { background: var(--cherry); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .status {
+    margin-top: 32px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    font-size: 14px;
+    display: none;
+  }
+  .status.visible { display: block; }
+  .status.error { border-color: var(--cherry); color: var(--cherry); }
+  .status.success { border-color: var(--eucalypt-dark); }
+  .download-btn {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 12px 24px;
+    background: var(--eucalypt);
+    color: var(--ink);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+  }
+  .download-btn:hover { background: var(--eucalypt-dark); color: var(--bg); }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .not-found {
+    margin-top: 12px;
+    padding: 12px;
+    background: rgba(71, 9, 23, 0.05);
+    border-left: 3px solid var(--cherry);
+    font-size: 13px;
+    color: var(--cherry);
+  }
+  .not-found-item { margin-top: 4px; }
+  .examples {
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .examples-title { margin-bottom: 8px; }
+  .example {
+    cursor: pointer;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.2s;
+  }
+  .example:hover { color: var(--ink); }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Quote Generator</h1>
+    <div class="subtitle">Type a request in plain English. Get a finished PDF.</div>
+
+    <textarea
+      id="prompt"
+      placeholder="e.g. quote for office 10 and 11 in wellington street"
+      autofocus
+    ></textarea>
+
+    <div class="button-row">
+      <button id="generate">Generate Quote</button>
+    </div>
+
+    <div class="examples">
+      <div class="examples-title">Examples (click to use):</div>
+      <div class="example" data-prompt="quote for office 11 in wellington street">→ quote for office 11 in wellington street</div>
+      <div class="example" data-prompt="prospect wants pricing for office 10, 11 and 13 at wellington">→ prospect wants pricing for office 10, 11 and 13 at wellington</div>
+      <div class="example" data-prompt="send me a quote for office 6 wellington">→ send me a quote for office 6 wellington</div>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+
+<script>
+  const promptEl = document.getElementById("prompt");
+  const generateBtn = document.getElementById("generate");
+  const statusEl = document.getElementById("status");
+
+  document.querySelectorAll(".example").forEach((el) => {
+    el.addEventListener("click", () => {
+      promptEl.value = el.dataset.prompt;
+      promptEl.focus();
+    });
+  });
+
+  function setStatus(html, type = "") {
+    statusEl.className = "status visible " + type;
+    statusEl.innerHTML = html;
+  }
+
+  async function generate() {
+    const prompt = promptEl.value.trim();
+    if (!prompt) {
+      setStatus("Please enter a request first.", "error");
+      return;
+    }
+
+    generateBtn.disabled = true;
+    setStatus('<span class="spinner"></span>Parsing request and looking up offices...');
+
+    try {
+      // Step 1: Parse the prompt and get office data
+      const quoteRes = await fetch("/api/generate-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      const quoteData = await quoteRes.json();
+
+      if (!quoteRes.ok) {
+        throw new Error(quoteData.error || "Failed to look up offices");
+      }
+
+      if (!quoteData.offices || quoteData.offices.length === 0) {
+        let msg = "<strong>No offices found.</strong>";
+        if (quoteData.not_found?.length) {
+          msg += "<div class='not-found'>";
+          quoteData.not_found.forEach((nf) => {
+            msg += `<div class='not-found-item'>Office ${nf.office_number} at ${nf.location}: ${nf.reason}</div>`;
+          });
+          msg += "</div>";
+        }
+        setStatus(msg, "error");
+        return;
+      }
+
+      // Step 2: Render the PDF
+      setStatus('<span class="spinner"></span>Generating PDF...');
+
+      const pdfRes = await fetch("/api/render-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offices: quoteData.offices }),
+      });
+
+      const pdfData = await pdfRes.json();
+
+      if (!pdfRes.ok) {
+        throw new Error(pdfData.error || "Failed to generate PDF");
+      }
+
+      // Step 3: Show download button
+      let msg = `<strong>Quote ready.</strong> ${pdfData.pages} office${pdfData.pages > 1 ? "s" : ""} in this PDF.`;
+      if (quoteData.not_found?.length) {
+        msg += "<div class='not-found'>Some offices weren't found and were skipped:";
+        quoteData.not_found.forEach((nf) => {
+          msg += `<div class='not-found-item'>· Office ${nf.office_number} at ${nf.location}</div>`;
+        });
+        msg += "</div>";
+      }
+      msg += `<div><a class="download-btn" href="${pdfData.pdf_url}" target="_blank" download>Download PDF</a></div>`;
+      setStatus(msg, "success");
+    } catch (err) {
+      setStatus(`<strong>Error:</strong> ${err.message}`, "error");
+    } finally {
+      generateBtn.disabled = false;
+    }
+  }
+
+  generateBtn.addEventListener("click", generate);
+  promptEl.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") generate();
+  });
+</script>
+</body>
+</html>
