@@ -1,6 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import chromium from "@sparticuz/chromium";
-import puppeteer from "puppeteer-core";
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -94,28 +92,34 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing 'offices' array in request body" });
   }
 
-  let browser;
   try {
     const html = renderFullHTML(offices);
 
-    browser = await puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
+    // Call PDFShift to render the HTML as a PDF
+    const pdfResponse = await fetch("https://api.pdfshift.io/v3/convert/pdf", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Basic " + Buffer.from("api:" + process.env.PDFSHIFT_API_KEY).toString("base64"),
+      },
+      body: JSON.stringify({
+        source: html,
+        landscape: true,
+        format: "A4",
+        margin: "0",
+        use_print: false,
+        sandbox: false,
+      }),
     });
 
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      landscape: true,
-      printBackground: true,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-    });
+    if (!pdfResponse.ok) {
+      const errText = await pdfResponse.text();
+      throw new Error(`PDFShift error (${pdfResponse.status}): ${errText}`);
+    }
 
-    await browser.close();
-    browser = null;
+    const pdfBuffer = Buffer.from(await pdfResponse.arrayBuffer());
 
+    // Upload to Supabase Storage
     const filename = `quote-${Date.now()}.pdf`;
     const { error: uploadErr } = await supabase.storage
       .from("offices")
@@ -136,7 +140,6 @@ export default async function handler(req, res) {
       pages: offices.length,
     });
   } catch (err) {
-    if (browser) await browser.close();
     console.error("render-pdf error:", err);
     return res.status(500).json({ error: err.message });
   }
